@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>MediaFetch - Video Downloader</title>
+
+    <link rel="stylesheet"
+          href="{{url_for('static', path='css/style.css')}}">
+</head>
+
+<body>
+
+    <header class="navbar">
+        <div class="logo">Media<span>Fetch.</span></div>
+        <div class="nav-label">FREE MEDIA UTILITY</div>
+    </header>
+
+    <main class="container">
+
+        <section class="hero">
+            <div class="tag">SIMPLE. FAST. FREE.</div>
+
+            <h1>
+                Your videos.<br>
+                <span>Your way.</span>
+            </h1>
+
+            <p class="subtitle">
+                Access and save videos you own or have permisssion
+                to download, all in one place.
+            </p>
+
+            <div class="download-card">
+                <button class="platform active"
+                        data-platform="youtube">
+                    YouTube
+                </button>
+
+                <button class="platform"
+                        data-platform="instagram">
+                    Instagram
+                </button>
+            </div>
+
+            <form id="downloadForm">
+                <label for="videoUrl">Paste your video URL</label>
+
+                <div class="input-wrapper">
+                    <input
+                        type="url"
+                        id="videoUrl"
+                        placeholder="https://www.youtube.com/..."
+                        required
+                    >
+
+                    <button type="button"
+                            id="pasteButton"
+                            class="paste-btn">
+                        Paste
+                    </button>
+                </div>
+
+                <button type="submit" class="download-btn" id="submitBtn">
+                    <span id="btnText">Get video information</span>
+                    <span id="btnArrow">-></span>
+                </button>
+            </form>
+
+            <div id="message" class="message"></div>
+
+            <!-- Video Preview Card Container -->
+            <div id="resultContainer" class="result-card" style="display: none; margin-top: 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px; display: flex; gap: 20px; align-items: center; text-align: left;">
+                <img id="videoThumbnail" src="" alt="Thumbnail" style="width: 160px; height: 90px; object-fit: cover; border-radius: 8px;" />
+                <div class="video-info" style="flex: 1;">
+                    <h3 id="videoTitle" style="font-size: 16px; margin-bottom: 8px; color: #fff;"></h3>
+                    <p id="videoAuthor" style="font-size: 14px; color: #9ca3af; margin-bottom: 4px;"></p>
+                    <p id="videoDuration" style="font-size: 14px; color: #9ca3af; margin-bottom: 12px;"></p>
+                    <button id="downloadFileBtn" class="download-btn" style="padding: 10px 16px; font-size: 14px;">Download Video (.mp4)</button>
+                </div>
+        </div>
+
+        <div class="features">
+            <div>✓ Mobile friendly</div>
+            <div>✓ Simple interface</div>
+            <div>✓ No registration</div>
+        </div>
+
+        </section>
+
+        <footer>
+            MediaFetch - Darshan © 2026 · Use only content you are
+            authorized to download
+        </footer>
+        
+
+    </main>
+
+    <script src="{{url_for('static', path='/js/app.js')}}"></script>
+
+</body>
+</html>
