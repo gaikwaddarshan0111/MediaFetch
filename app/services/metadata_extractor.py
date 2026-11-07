@@ -1,9 +1,12 @@
 import yt_dlp
 
+from app.services.ytdlp_options import base_opts
+
 def extract_video_metadata(url: str) -> dict:
     ydl_opts = {
-        'extract_flat': True ,# Fast extraction without downloading
-        'skip_download': True,
+        **base_opts(),
+        "extract_flat": True ,# Fast extraction without downloading
+        "skip_download": True,
     }
 
     try:
