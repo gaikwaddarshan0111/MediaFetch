@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Save Instagram videos you own or have permission to download.">
 
-    <title>MediaFetch - Video Downloader</title>
+    <title>MediaFetch - Instagram Video Downloader</title>
 
-    <link rel="stylesheet"
-          href="{{url_for('static', path='css/style.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
 </head>
 
 <body>
 
     <header class="navbar">
-        <div class="logo">Media<span>Fetch.</span></div>
+        <div class="logo">Insta<span>Pull</span></div>
         <div class="nav-label">UTILITY BY DARSHAN</div>
     </header>
 
@@ -28,76 +28,67 @@
             </h1>
 
             <p class="subtitle">
-                Access and save videos you own or have permisssion
+                Save Instagram videos you own or have permission
                 to download, all in one place.
             </p>
 
             <div class="download-card">
-                <button class="platform active"
-                        data-platform="youtube">
-                    YouTube
-                </button>
+                <form id="downloadForm">
+                    <label for="videoUrl">Instagram video URL</label>
 
-                <button class="platform"
-                        data-platform="instagram">
-                    Instagram
-                </button>
+                    <div class="input-wrapper">
+                        <input
+                            type="url"
+                            id="videoUrl"
+                            placeholder="https://www.instagram.com/reel/..."
+                            autocomplete="off"
+                            inputmode="url"
+                            required
+                        >
+
+                        <button type="button" id="pasteButton" class="paste-btn">
+                            Paste
+                        </button>
+                    </div>
+
+                    <button type="submit" class="download-btn" id="submitBtn">
+                        <span id="btnText">Get video information</span>
+                    </button>
+                </form>
+
+                <div id="message" class="message" role="status" aria-live="polite"></div>
             </div>
 
-            <form id="downloadForm">
-                <label for="videoUrl">Paste your video URL</label>
+            <!-- Hidden until a video is found -->
+            <div id="resultContainer" class="result-card" hidden>
+                <img id="videoThumbnail" alt="" referrerpolicy="no-referrer" hidden>
 
-                <div class="input-wrapper">
-                    <input
-                        type="url"
-                        id="videoUrl"
-                        placeholder="https://www.youtube.com/..."
-                        required
-                    >
+                <div class="video-info">
+                    <h3 id="videoTitle"></h3>
+                    <p id="videoAuthor" class="video-meta"></p>
+                    <p id="videoDuration" class="video-meta"></p>
 
-                    <button type="button"
-                            id="pasteButton"
-                            class="paste-btn">
-                        Paste
+                    <button type="button" id="downloadFileBtn" class="download-btn">
+                        Download video (.mp4)
                     </button>
                 </div>
+            </div>
 
-                <button type="submit" class="download-btn" id="submitBtn">
-                    <span id="btnText">Get video information</span>
-                    <span id="btnArrow">-></span>
-                </button>
-            </form>
-
-            <div id="message" class="message"></div>
-
-            <!-- Video Preview Card Container -->
-            <div id="resultContainer" class="result-card" style="display: none; margin-top: 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px; display: flex; gap: 20px; align-items: center; text-align: left;">
-                <img id="videoThumbnail" src="" alt="Thumbnail" style="width: 160px; height: 90px; object-fit: cover; border-radius: 8px;" />
-                <div class="video-info" style="flex: 1;">
-                    <h3 id="videoTitle" style="font-size: 16px; margin-bottom: 8px; color: #fff;"></h3>
-                    <p id="videoAuthor" style="font-size: 14px; color: #9ca3af; margin-bottom: 4px;"></p>
-                    <p id="videoDuration" style="font-size: 14px; color: #9ca3af; margin-bottom: 12px;"></p>
-                    <button id="downloadFileBtn" class="download-btn" style="padding: 10px 16px; font-size: 14px;">Download Video (.mp4)</button>
-                </div>
-        </div>
-
-        <div class="features">
-            <div>✓ Mobile friendly</div>
-            <div>✓ Simple interface</div>
-            <div>✓ No registration</div>
-        </div>
-
+            <div class="features">
+                <div>✓ Mobile friendly</div>
+                <div>✓ Simple interface</div>
+                <div>✓ No registration</div>
+            </div>
         </section>
 
         <footer>
-            MediaFetch - Darshan © 2026 · Use only content you are
+            InstaPull - Darshan © 2026 · Use only content you are
             authorized to download
         </footer>
-        
 
     </main>
 
-    <script src="{{url_for('static', path='/js/app.js')}}"></script>
+    <script src="{{ url_for('static', path='js/app.js') }}"></script>
 
 </body>
 </html>

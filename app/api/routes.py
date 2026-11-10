@@ -1,6 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 import os
+import shutil
+
+from pathlib import Path
 
 from app.schemas.video import VideoRequest, VideoResponse
 from app.services.platform_detector import detect_platform
@@ -10,25 +14,32 @@ from app.services.downloader import download_video_file
 # Do not put prefix here if main.py already adds /api/video
 router = APIRouter(tags=["Video"])
 
-@router.post("/info", response_model=VideoResponse)
-def get_video_info(request: VideoRequest):
+
+def validate_request(request: VideoRequest) -> str:
     detected_platform = detect_platform(str(request.url))
 
     if not detected_platform:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported video platform"
-        )
-    
+        raise HTTPException(status_code=400, detail="Only Instagram links are supported.")
+
     if detected_platform != request.platform:
-        raise HTTPException(
-            status_code=400,
-            detail="Selected platform does not match URL"
-        )
-    
-    # Fetch real metadata
+        raise HTTPException(status_code=400, detail="Selected platform does not match URL.")
+
+    return detected_platform
+
+
+@router.post("/info", response_model=VideoResponse)
+def get_video_info(request: VideoRequest):
+    detected_platform = validate_request(request)
+
     metadata = extract_video_metadata(str(request.url))
-    
+
+    # extract_video_metadata returns {} when yt-dlp fails
+    if not metadata:
+        raise HTTPException(
+            status_code=422,
+            detail="Couldn't read this video. It may be private, removed, or temporarily blocked."
+        )
+
     return VideoResponse(
         platform=detected_platform,
         url=str(request.url),
@@ -40,38 +51,31 @@ def get_video_info(request: VideoRequest):
         author=metadata.get("author")
     )
 
+
 @router.post("/download")
 def download_video(request: VideoRequest):
-    detected_platform = detect_platform(str(request.url))
+    validate_request(request)
 
-    if not detected_platform:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported video platform"
-        )
-    
-    if detected_platform != request.platform:
-        raise HTTPException(
-            status_code=400,
-            detail="Selected platform does not match URL"
-        )
-    
     try:
         file_path = download_video_file(str(request.url))
-
-        if not os.path.exists(file_path):
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate video file"
-            )
-            
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type="application/octet-stream"
-        )
     except Exception as e:
+        print(f"Download error: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=str(e)
+            status_code=502,
+            detail="Couldn't download this video. It may be private, removed, or temporarily blocked."
         )
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=500, detail="Failed to generate video file.")
+
+    return FileResponse(
+        path=file_path,
+        filename=os.path.basename(file_path),
+        media_type="video/mp4",
+        # Delete the temp file once it has been sent so the server disk doesn't fill up
+        background=BackgroundTask(
+            shutil.rmtree,
+            str(Path(file_path).parent),
+            ignore_errors=True
+        )
+    )

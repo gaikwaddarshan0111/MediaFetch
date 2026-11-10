@@ -6,7 +6,7 @@ class VideoRequest(BaseModel):
 
     url: HttpUrl
 
-    platform: Literal["youtube", "instagram"]
+    platform: Literal["instagram"]
 
 class VideoResponse(BaseModel):
 

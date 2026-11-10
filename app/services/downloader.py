@@ -1,33 +1,68 @@
 import os
+import shutil
+import subprocess
 import tempfile
+
 import yt_dlp
 
 from app.services.ytdlp_options import base_opts
 
-# Create a secure temporary directory for downloaded media
-TEMP_DIR = tempfile.mkdtemp()
 
 def download_video_file(url: str) -> str:
+    # Isolated directory for each download
 
-    ydl_opts = {
-        **base_opts(),
-        "format": "bv*+ba/b",
-        "outtmpl": os.path.join(TEMP_DIR, "%(id)s.%(ext)s"),
-        "merge_output_format": "mp4",
-    }
+    temp_dir = tempfile.mkdtemp(prefix="mediafetch_")
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        options = {
+            **base_opts(),
+            "format": "best",
+            "outtmpl": os.path.join(
+                temp_dir, "source.%(ext)s"
+            ),
+            "noplaylist": True,
+        }
+
+        with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+            source = ydl.prepare_filename(info)
 
-            # Ensure path points to the merged .mp4 file
-            base, _ = os.path.splitext(filename)
-            mp4_path = base + ".mp4"
-            if os.path.exists(mp4_path):
-                return mp4_path
+        if not os.path.isfile(source):
+            raise RuntimeError("Source video not found")
+        
+        output = os.path.join(temp_dir, "instagram.mp4")
 
-            return filename
-    except Exception as e:
-        print(f"Download error: {e}")
-        raise e
+        command = [
+            "ffmpeg", "-y",
+            "-i", source,
+            "-map", "0:v:0",
+            "-map", "0:a:0?",
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-profile:a", "aac_low",
+            "-b:a", "128k",
+            "-ar", "44100",
+            "-ac", "2",
+            "-movflags","+faststart",
+            output,
+        ]
+
+        subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=600,
+
+        )
+
+        if not os.path.isfile(output):
+            raise RuntimeError("Conversion failed")
+        return output
+    
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
