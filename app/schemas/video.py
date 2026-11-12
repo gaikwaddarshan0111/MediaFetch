@@ -25,3 +25,7 @@ class VideoResponse(BaseModel):
     duration: Optional[int] = None
 
     author: Optional[str] = None
+
+    media_type: Literal["photo","video","carousel"]
+
+    download_format: Literal["jpg", "mp4", "zip"]
