@@ -56,6 +56,22 @@ def extract_video_metadata(url: str) -> dict:
     Extract metadata for a video URL.
     """
 
+    path = urlparse(url).path
+
+    # STEP 1: Directory process Instgram posts
+    # Supports photos, videos and carousels.
+
+    if path.startswith("/p/"):
+        print(
+            "[OPTIMIZATION] Instagram post detected. Using Instaloader.",
+            flush=True
+        )
+
+        return extract_instagram_photo_metadata(url)
+    
+    # STEP 2: Process Instagram Reels using yt-dlp
+
+
     ydl_opts = {
         **base_opts(),
         "extract_flat": False,# Fast extraction without downloading
@@ -71,7 +87,9 @@ def extract_video_metadata(url: str) -> dict:
 
         media_type = detect_media_type(info)
 
-        if media_type == {"unknown", "carousel"}:
+        # Corrected media type comparison 
+
+        if media_type in {"unknown", "carousel"}:
             
             return extract_instagram_photo_metadata(url)
 
@@ -92,6 +110,11 @@ def extract_video_metadata(url: str) -> dict:
             "photo": "jpg",
             "carousel": "individual",
         }[media_type]
+
+        print(
+            f"[METADATA] Detected type: {media_type}",
+            flush=True
+        )
 
         return {
             "title": first_entry.get("title") or info.get("title"),
