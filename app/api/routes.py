@@ -1,34 +1,65 @@
+
+import os
+import shutil
+import traceback
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
-import os
-import shutil
-
-from pathlib import Path
 
 from app.schemas.video import VideoRequest, VideoResponse
 from app.services.platform_detector import detect_platform
 from app.services.metadata_extractor import extract_video_metadata
 from app.services.downloader import download_video_file
 from app.services.photo_downloader import download_instagram_photo
+from app.schemas.video import CarouselItemRequest
+from app.services.carousel_item_downloader import download_carousel_item
 
-# Do not put prefix here if main.py already adds /api/video
-router = APIRouter(tags=["Video"])
+# Prefix /api/video is already configured in main.py
+router = APIRouter(tags=["Media"])
 
 
 def validate_request(request: VideoRequest) -> str:
     detected_platform = detect_platform(str(request.url))
 
-    if not detected_platform:
-        raise HTTPException(status_code=400, detail="Only Instagram links are supported.")
+    if detected_platform != "instagram":
+        raise HTTPException(
+            status_code=400,
+            detail="Only Instagram URLs are supported."
+        )
 
     if detected_platform != request.platform:
-        raise HTTPException(status_code=400, detail="Selected platform does not match URL.")
+        raise HTTPException(
+            status_code=400,
+            detail="Selected platform does not match URL."
+        )
 
     return detected_platform
 
 
+def create_file_response(file_path: str, filename: str, media_type: str):
+    if not os.path.isfile(file_path):
+        raise HTTPException(
+            status_code=500,
+            detail="Downloaded file was not generated."
+        )
 
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type=media_type,
+        background=BackgroundTask(
+            shutil.rmtree,
+            str(Path(file_path).parent),
+            ignore_errors=True,
+        ),
+    )
+
+
+# --------------------------------------------------
+# GET MEDIA INFORMATION
+# --------------------------------------------------
 
 @router.post("/info", response_model=VideoResponse)
 def get_video_info(request: VideoRequest):
@@ -39,11 +70,13 @@ def get_video_info(request: VideoRequest):
     if not metadata:
         raise HTTPException(
             status_code=422,
-            detail=(
-                "Couldn't read this Instagram post. "
-                "It may be private, removed, or temporarily unavailable."
-            ),
+            detail="Unable to retrieve Instagram media information."
         )
+
+    print(
+        f"[INFO] Detected media: {metadata.get('media_type')}",
+        flush=True
+    )
 
     return VideoResponse(
         platform=detected_platform,
@@ -56,106 +89,191 @@ def get_video_info(request: VideoRequest):
         author=metadata.get("author"),
         media_type=metadata["media_type"],
         download_format=metadata["download_format"],
+        carousel_items=metadata.get("carousel_items", []),
     )
 
+
+# --------------------------------------------------
+# UNIFIED MEDIA DOWNLOAD
+# --------------------------------------------------
 
 @router.post("/download")
-def download_video(request: VideoRequest):
+def download_media(request: VideoRequest):
     validate_request(request)
 
-    try:
-        file_path = download_video_file(str(request.url))
-    except Exception as e:
-        print(f"Download error: {e}")
+    url = str(request.url)
+
+    metadata = extract_video_metadata(url)
+
+    if not metadata:
         raise HTTPException(
-            status_code=502,
-            detail="Couldn't download this video. It may be private, removed, or temporarily blocked."
+            status_code=422,
+            detail="Unable to identify Instagram media."
         )
 
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=500, detail="Failed to generate video file.")
+    media_type = metadata.get("media_type")
 
-    return FileResponse(
-        path=file_path,
-        filename=os.path.basename(file_path),
-        media_type="video/mp4",
-        # Delete the temp file once it has been sent so the server disk doesn't fill up
-        background=BackgroundTask(
-            shutil.rmtree,
-            str(Path(file_path).parent),
-            ignore_errors=True
-        )
+    print(
+        f"[DOWNLOAD] Detected type: {media_type}",
+        flush=True
     )
 
-
-@router.post("/photo/download")
-def download_photo(request: VideoRequest):
-    validate_request(request)
+    if media_type == "carousel":
+        raise HTTPException(
+            status_code=501,
+            detail="Carousel download is not supported yet."
+        )
 
     try:
-        print(
-            "[PHOTO DOWNLOAD] Starting Instagram photo download",
-            flush=True
-        )
+        if media_type == "photo":
 
-        file_path = download_instagram_photo(
-            str(request.url)
-        )
+            print("[DOWNLOAD] Starting photo download", flush=True)
 
-        print(
-            f"[PHOTO DOWNLOAD] File created: {file_path}",
-            flush=True
-        )
+            file_path = download_instagram_photo(url)
+
+            filename = "instagram-photo.jpg"
+            content_type = "image/jpeg"
+
+        elif media_type == "video":
+
+            print("[DOWNLOAD] Starting video download", flush=True)
+
+            file_path = download_video_file(url)
+
+            filename = os.path.basename(file_path)
+            content_type = "video/mp4"
+
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="Unsupported Instagram media type."
+            )
+
+    except HTTPException:
+        raise
 
     except ValueError as error:
-        print(
-            f"[PHOTO DOWNLOAD] Validation error: {error}",
-            flush=True
-        )
-
         raise HTTPException(
             status_code=400,
             detail=str(error)
         ) from error
 
     except Exception as error:
-        import traceback
-
         print(
-            "\n========== PHOTO DOWNLOAD ERROR ==========",
+            "\n========== MEDIA DOWNLOAD ERROR ==========",
             flush=True
         )
+        traceback.print_exc()
+        print("==========================================\n", flush=True)
 
-        traceback.print_exception(
-            type(error),
-            error,
-            error.__traceback__
-        )
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to download Instagram media."
+        ) from error
 
-        print(
-            "==========================================\n",
-            flush=True
-        )
+    print(
+        f"[DOWNLOAD] File ready: {file_path}",
+        flush=True
+    )
+
+    return create_file_response(
+        file_path=file_path,
+        filename=filename,
+        media_type=content_type,
+    )
+
+
+# --------------------------------------------------
+# LEGACY PHOTO ENDPOINT
+# Retained for frontend compatibility
+# --------------------------------------------------
+
+@router.post("/photo/download")
+def download_photo(request: VideoRequest):
+    validate_request(request)
+
+    try:
+        file_path = download_instagram_photo(str(request.url))
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        ) from error
+
+    except Exception as error:
+        traceback.print_exc()
 
         raise HTTPException(
             status_code=502,
             detail="Unable to retrieve this Instagram photo."
         ) from error
 
-    # Executed only after successful download
-    if not os.path.isfile(file_path):
-        raise HTTPException(
-            status_code=500,
-            detail="Photo file was not generated."
+    return create_file_response(
+        file_path=file_path,
+        filename="instagram-photo.jpg",
+        media_type="image/jpeg",
+    )
+
+# --------------------------------------------------
+# INDIVIDUAL CAROUSEL ITEM DOWNLOAD
+# --------------------------------------------------
+
+@router.post("/carousel/item/download")
+def download_single_carousel_item(request: CarouselItemRequest):
+    validate_request(request)
+
+    print(
+        f"[CAROUSEL ITEM DOWNLOAD] Request received for item {request.index}",
+        flush=True
+    )
+
+    try:
+        file_path = download_carousel_item(
+            url=str(request.url),
+            index=request.index
         )
 
-    return FileResponse(
-        path=file_path,
-        filename="instagram_photo.jpg",
-        media_type="image/jpeg",
-        background=BackgroundTask(
-            shutil.rmtree,
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )from error
+
+    except Exception as error:
+        import traceback
+        traceback.print_exc()
+
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to download carousel item."
+        )from error
+
+    extension = Path(file_path).suffix.lower()
+
+    media_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".mp4": "video/mp4",
+    }
+
+    media_type = media_types.get(extension)
+
+    if not media_type:
+        shutil.rmtree(
             str(Path(file_path).parent),
-            ignore_errors=True,
-        ),
+            ignore_errors=True
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unsupported downloaded file format."
+        )
+
+    return create_file_response(
+        file_path=file_path,
+        filename=f"instagram-{request.index}{extension}",
+        media_type=media_type
     )

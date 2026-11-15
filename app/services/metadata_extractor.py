@@ -49,7 +49,7 @@ def detect_media_type(info: dict) -> str:
     if path.startswith("/reel/") or path.startswith("/reels/"):
         return "video"
     
-    return "unkown"
+    return "unknown"
 
 def extract_video_metadata(url: str) -> dict:
     """
@@ -71,11 +71,9 @@ def extract_video_metadata(url: str) -> dict:
 
         media_type = detect_media_type(info)
 
-        if media_type == "unknown":
-            logger.warning(
-                "Unable to determine Instagram media type"
-            )
-            return {}
+        if media_type == {"unknown", "carousel"}:
+            
+            return extract_instagram_photo_metadata(url)
 
         first_entry = info
 
@@ -92,7 +90,7 @@ def extract_video_metadata(url: str) -> dict:
         download_format = {
             "video": "mp4",
             "photo": "jpg",
-            "carousel": "zip",
+            "carousel": "individual",
         }[media_type]
 
         return {
@@ -144,13 +142,39 @@ def extract_instagram_photo_metadata(url: str) -> dict:
             shortcode,
         )
 
+        print(f"[INSTAGRAM] Post type: {post.typename}")
+
+        carousel_items = []
+
         if post.typename == "GraphImage":
             media_type = "photo"
             download_format = "jpg"
 
         elif post.typename == "GraphSidecar":
+            # Multiple photos or videos
+
             media_type = "carousel"
-            download_format = "zip"
+            download_format = "individual"
+
+            nodes = list(post.get_sidecar_nodes())
+
+            print(f"[CAROUSEL] Total items: {len(nodes)}")
+
+            for index, node in enumerate(nodes, start=1):
+
+                item_type = (
+                    "video" if node.is_video else "photo"
+                )
+
+                carousel_items.append({
+                    "index": index,
+                    "media_type": item_type,
+                    "thumbnail": node.display_url,
+                })
+
+                print(
+                    f"[CAROUSEL] Item {index}: {item_type}"
+                )
 
         elif post.typename == "GraphVideo":
             media_type = "video"
@@ -170,8 +194,10 @@ def extract_instagram_photo_metadata(url: str) -> dict:
             "author": post.owner_username,
             "media_type": media_type,
             "download_format": download_format,
+            "carousel_items": carousel_items,
         }
 
     except Exception as error:
         print(f"Instagram metadata fallback error: {error}")
         return {}
+
