@@ -6,3 +6,12 @@ cookies.txt
 downloads/
 .env
 .DS_Store
+# Python generated files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+.venv/
+
+# Local backups
+*.backup

@@ -3,3 +3,5 @@ uvicorn
 pydantic
 yt-dlp[default]
 jinja2
+instaloader
+requests

@@ -74,5 +74,5 @@ def download_instagram_photo(url: str) -> str:
         return str(output)
     
     except Exception:
-        shutil.rmtree(temp_dir, ignore_erors=True)
+        shutil.rmtree(temp_dir, ignore_errors=True)
         raise 
