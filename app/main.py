@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.api.routes import router as video_router
+from fastapi.responses import FileResponse
 
 
 
@@ -39,5 +40,30 @@ def health_check():
         "status": "healthy",
         "application": "MediaFetch"
     }
+
+
+# --------------------------------------------------
+# GOOGLE SEO - ROBOTS.TXT
+# --------------------------------------------------
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    return FileResponse(
+        "app/static/robots.txt",
+        media_type="text/plain"
+    )
+
+
+# --------------------------------------------------
+# GOOGLE SEO - SITEMAP.XML
+# --------------------------------------------------
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml():
+    return FileResponse(
+        "app/static/sitemap.xml",
+        media_type="application/xml"
+    )
+
 
 app.include_router(video_router, prefix="/api/video", tags=["video"])
