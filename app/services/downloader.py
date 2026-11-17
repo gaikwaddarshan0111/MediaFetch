@@ -60,18 +60,18 @@ def is_compatible_mp4(file_path: str) -> bool:
         return False
 
 
-def download_video_file(url: str) -> str:
-    # Isolated directory for each download
 
+def download_video_file(url: str) -> str:
     temp_dir = tempfile.mkdtemp(prefix="mediafetch_")
 
     try:
+        ffmpeg_available = shutil.which("ffmpeg") is not None
+        ffprobe_available = shutil.which("ffprobe") is not None
+
         options = {
             **base_opts(),
-            "format": "best[ext=mp4]/best",
-            "outtmpl": os.path.join(
-                temp_dir, "source.%(ext)s"
-            ),
+            "format": "best[ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[ext=mp4]/best",
+            "outtmpl": os.path.join(temp_dir, "source.%(ext)s"),
             "noplaylist": True,
         }
 
@@ -81,24 +81,36 @@ def download_video_file(url: str) -> str:
 
         if not os.path.isfile(source):
             raise RuntimeError("Source video not found")
-        
+
         output = os.path.join(temp_dir, "instagram.mp4")
 
-
         if is_compatible_mp4(source):
-            print(
-                "[DOWNLOAD] Compatible MP4 detected. Skipping FFmpeg.",
-                flush=True,
-            )
-
+            print("[DOWNLOAD] Compatible MP4. Skipping FFmpeg.", flush=True)
             os.replace(source, output)
             return output
 
-        print(
-            "[DOWNLOAD] Conversion required. Starting FFmpeg.",
-            flush=True,
-        )
+        # When probing is unavailable, use an MP4 directly.
+        # Codec compatibility cannot be guaranteed in this case.
+        if (
+            not ffmpeg_available
+            and not ffprobe_available
+            and source.lower().endswith(".mp4")
+        ):
+            print(
+                "[DOWNLOAD] FFmpeg/FFprobe unavailable. "
+                "Returning MP4 without codec verification.",
+                flush=True,
+            )
+            os.replace(source, output)
+            return output
 
+        if not ffmpeg_available:
+            raise RuntimeError(
+                "FFmpeg is required for this media format "
+                "but is unavailable on the server."
+            )
+
+        print("[DOWNLOAD] Starting FFmpeg conversion.", flush=True)
 
         command = [
             "ffmpeg", "-y",
@@ -110,11 +122,10 @@ def download_video_file(url: str) -> str:
             "-crf", "23",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
-            "-profile:a", "aac_low",
             "-b:a", "128k",
             "-ar", "44100",
             "-ac", "2",
-            "-movflags","+faststart",
+            "-movflags", "+faststart",
             output,
         ]
 
@@ -124,13 +135,13 @@ def download_video_file(url: str) -> str:
             capture_output=True,
             text=True,
             timeout=600,
-
         )
 
         if not os.path.isfile(output):
             raise RuntimeError("Conversion failed")
+
         return output
-    
+
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise
