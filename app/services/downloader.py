@@ -72,6 +72,7 @@ def download_video_file(url: str) -> str:
     - Clean up temporary files if downloading fails.
     """
 
+def download_video_file(url: str) -> str:
     temp_dir = tempfile.mkdtemp(prefix="mediafetch_")
 
     try:
@@ -132,7 +133,6 @@ def download_video_file(url: str) -> str:
                 "Skipping conversion.",
                 flush=True,
             )
-
             os.replace(source, output)
             return output
 
