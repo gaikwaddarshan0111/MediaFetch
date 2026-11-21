@@ -62,58 +62,106 @@ def is_compatible_mp4(file_path: str) -> bool:
 
 
 def download_video_file(url: str) -> str:
+    """
+    Download Instagram video with Vercel-compatible fallback.
+
+    - Prefer H.264/AAC MP4.
+    - Skip FFmpeg when the file is compatible.
+    - Allow direct MP4 delivery when FFmpeg is unavailable.
+    - Convert incompatible formats when FFmpeg is available.
+    - Clean up temporary files if downloading fails.
+    """
+
+def download_video_file(url: str) -> str:
     temp_dir = tempfile.mkdtemp(prefix="mediafetch_")
 
     try:
         ffmpeg_available = shutil.which("ffmpeg") is not None
         ffprobe_available = shutil.which("ffprobe") is not None
 
+        print(
+            f"[ENV] FFmpeg: {ffmpeg_available}, "
+            f"FFprobe: {ffprobe_available}",
+            flush=True,
+        )
+
         options = {
             **base_opts(),
-            "format": "best[ext=mp4][vcodec^=avc1][acodec^=mp4a]/best[ext=mp4]/best",
-            "outtmpl": os.path.join(temp_dir, "source.%(ext)s"),
+            "format": (
+                "best[ext=mp4][vcodec^=avc1][acodec^=mp4a]/"
+                "best[ext=mp4][vcodec^=avc1]/"
+                "best[ext=mp4]/best"
+            ),
+            "outtmpl": os.path.join(
+                temp_dir,
+                "source.%(ext)s"
+            ),
             "noplaylist": True,
+            "merge_output_format": "mp4",
         }
 
+        # Download media
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)
+
+            if not info:
+                raise RuntimeError(
+                    "Instagram returned no video information."
+                )
+
             source = ydl.prepare_filename(info)
 
         if not os.path.isfile(source):
-            raise RuntimeError("Source video not found")
+            raise RuntimeError(
+                "Downloaded source video not found."
+            )
 
-        output = os.path.join(temp_dir, "instagram.mp4")
+        print(
+            f"[DOWNLOAD] Source: {source}",
+            flush=True,
+        )
 
-        if is_compatible_mp4(source):
-            print("[DOWNLOAD] Compatible MP4. Skipping FFmpeg.", flush=True)
-            os.replace(source, output)
-            return output
+        output = os.path.join(
+            temp_dir,
+            "instagram.mp4"
+        )
 
-        # When probing is unavailable, use an MP4 directly.
-        # Codec compatibility cannot be guaranteed in this case.
-        if (
-            not ffmpeg_available
-            and not ffprobe_available
-            and source.lower().endswith(".mp4")
-        ):
+        # Case 1: Already compatible with mobile playback
+        if ffprobe_available and is_compatible_mp4(source):
             print(
-                "[DOWNLOAD] FFmpeg/FFprobe unavailable. "
-                "Returning MP4 without codec verification.",
+                "[DOWNLOAD] Compatible MP4 detected. "
+                "Skipping conversion.",
                 flush=True,
             )
             os.replace(source, output)
             return output
 
+        # Case 2: Vercel does not have FFmpeg
         if not ffmpeg_available:
+            if source.lower().endswith(".mp4"):
+                print(
+                    "[DOWNLOAD] FFmpeg unavailable. "
+                    "Returning existing MP4.",
+                    flush=True,
+                )
+
+                os.replace(source, output)
+                return output
+
             raise RuntimeError(
-                "FFmpeg is required for this media format "
-                "but is unavailable on the server."
+                "Downloaded video is not MP4 and "
+                "FFmpeg is unavailable."
             )
 
-        print("[DOWNLOAD] Starting FFmpeg conversion.", flush=True)
+        # Case 3: Convert using FFmpeg
+        print(
+            "[DOWNLOAD] Starting FFmpeg conversion.",
+            flush=True,
+        )
 
         command = [
-            "ffmpeg", "-y",
+            "ffmpeg",
+            "-y",
             "-i", source,
             "-map", "0:v:0",
             "-map", "0:a:0?",
@@ -138,10 +186,26 @@ def download_video_file(url: str) -> str:
         )
 
         if not os.path.isfile(output):
-            raise RuntimeError("Conversion failed")
+            raise RuntimeError(
+                "FFmpeg conversion failed."
+            )
+
+        print(
+            "[DOWNLOAD] Conversion completed.",
+            flush=True,
+        )
 
         return output
 
-    except Exception:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+    except Exception as error:
+        print(
+            f"[DOWNLOAD ERROR] {type(error).__name__}: {error}",
+            flush=True,
+        )
+
+        shutil.rmtree(
+            temp_dir,
+            ignore_errors=True
+        )
+
         raise
